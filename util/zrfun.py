@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sun Aug 21 10:18:52 2016
-@author: PM5
+
+Modified from Parker MacCready, School of Oceanography, University of Washington
+https://github.com/parkermac
+
 Module of functions specific to ROMS.
+
 """
 import netCDF4 as nc
 import numpy as np
@@ -26,8 +29,12 @@ def get_basic_info(fn, only_G=False, only_S=False, only_T=False):
         G = dict()
         for vv in g_varlist:
             G[vv] = ds.variables[vv][:]
-        G['DX'] = 1/G['h']#['pm']
-        G['DY'] = 1/G['h']#['pn']
+        if g_varlist.count('pm')>0:
+            G['DX'] = 1/G['pm']
+            G['DY'] = 1/G['pn']
+        else:
+            G['DX'] = 1
+            G['DY'] = 1
         G['M'], G['L'] = np.shape(G['lon_rho']) # M = rows, L = columns
         # make the masks boolean (True = water, False = land, opposite of masked arrays!)
         G['mask_rho'] = G['mask_rho'] == 1

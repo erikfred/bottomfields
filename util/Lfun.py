@@ -1,5 +1,10 @@
 """
-Functions for LiveOcean.
+
+Modified from Parker MacCready, School of Oceanography, University of Washington
+https://github.com/parkermac
+
+Functions for establishing file system, and other mechanics
+
 """
 import os
 from datetime import datetime, timedelta
@@ -12,13 +17,6 @@ import shutil
 alp = os.path.dirname(os.path.realpath(__file__))
 alp_user = alp.replace('LiveOcean','LiveOcean_user')
 upath = alp_user.replace('/alpha','')
-
-# Checking on things
-# These all have the usual linux path format of no final "/".
-# print('alp = ' + alp)
-# print('alp_user = ' + alp_user)
-# print('upath = ' + upath)
-# In contrast, in the paths I save in Ldir we do have a final "/"
 
 def Lstart(gridname='BLANK', tag='BLANK'):
     """

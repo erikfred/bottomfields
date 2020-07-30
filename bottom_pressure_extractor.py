@@ -2,10 +2,15 @@
 # -*- coding: utf-8 -*-
 """
 
+Modified from Parker MacCready, School of Oceanography, University of Washington
+https://github.com/parkermac
+
 This creates and a single NetCDF file containing bottom pressure
 and other fields, for some time range.
 
 """
+
+## CONFIG ##
 
 from datetime import datetime, timedelta
 start_time = datetime.now()
@@ -13,99 +18,58 @@ import netCDF4 as nc
 
 import os
 import sys
-pth = os.path.abspath('../../LiveOcean/alpha')
-if pth not in sys.path:
-    sys.path.append(pth)
+sys.path.append(os.path.abspath('util'))
 import Lfun
 import numpy as np
 import zrfun
 import zfun
 
-pth = os.path.abspath('../../LiveOcean/plotting')
-if pth not in sys.path:
-    sys.path.append(pth)
-import pfun
+# establish file structure
+workdir = os.path.dirname(os.path.realpath(__file__))
+datadir = workdir + '_data/'
+outdir = workdir + '_output/'
+workdir = workdir + '/'
 
-n_layer = 0 # 0 = deepest
-do_press = True
+model_type = 'Kurapov' # useful for functionality with other ROMS down the road
 
-# model_type = 'LiveOcean'
-model_type = 'Kurapov'
+testbatch = False # True will only process first 10 input files, False will run all
 
-if model_type == 'LiveOcean':
-    gridname = 'cascadia1'
-    tag = 'base'
-    ex_name = 'lobio5'
-    list_type = 'low_passed'
-    #
-    Ldir = Lfun.Lstart(gridname, tag)
-    Ldir['ex_name'] = ex_name
-    Ldir['gtagex'] = Ldir['gtag'] + '_' + Ldir['ex_name']
-    tag = Ldir['gtagex']
-    #
-    if Ldir['lo_env'] == 'pm_mac':
-        dt0 = datetime(2017,8,5)
-        dt1 = datetime(2017,8,9)
-    elif Ldir['lo_env'] == 'pm_fjord':
-        dt0 = datetime(2017,1,1)
-        dt1 = datetime(2017,12,31)
-    #
-    if list_type == 'low_passed':
-        fn_list = []
-        dt = dt0
-        while dt <= dt1:
-            date_string = dt.strftime(format='%Y.%m.%d')
-            Ldir['date_string'] = date_string
-            f_string = 'f' + Ldir['date_string']
-            in_dir = Ldir['roms'] + 'output/' + Ldir['gtagex'] + '/' + f_string + '/'
-            if 'low_passed.nc' in os.listdir(in_dir):
-                fn_list.append(in_dir + 'low_passed.nc')
-            else:
-                print('Missing file for ' + date_string)
-            dt = dt + timedelta(days=1)
-    #
-    # make some things
-    fn = fn_list[0]
-    ds = nc.Dataset(fn)
-    G, S, T = zrfun.get_basic_info(fn)
-    h = ds['h'][:]
-    z = zrfun.get_z(h, 0*h, S, only_rho=True)
-    z0 = z[n_layer,:,:].squeeze()
-    ds.close()
+## END CONFIG ##
 
-elif model_type == 'Kurapov':
-    Ldir = Lfun.Lstart() #checks for _user directory and changes paths accordingly
-    in_dir = Ldir['parent'] + 'ptools_data/Kurapov/' #location of .nc files
+if model_type == 'Kurapov':
+    # information about data files
+    in_dir = datadir + model_type +'/' #location of .nc files
+    ncstr = 'zts_Monterey_Exp41_'
+    ni = 3000
+    nf = 3697
     tag = 'kurapov'
+    n_layer = 0 # bottom layer
 
     # get grid info
-    fng = in_dir + 'zts_Monterey_Exp41_3000.nc' #all files contain grid info
-    dsg = nc.Dataset(fng) #gets metadata
-    if False: #probably some kind of check
+    fng = in_dir + ncstr + str(ni) + '.nc'
+    dsg = nc.Dataset(fng) # opens netCDF file
+    if False: # set to True if you want to print netCDF info
         print('\nGRID INFO')
         zfun.ncd(dsg)
-    lon = dsg['lon_rho'][:,:] #probably taking a cutout from full model domain
-    lat = dsg['lat_rho'][:,:] #[1030-1:1521, 375-1:615]
+    lon = dsg['lon_rho'][:,:] # take cutout from full model domain, if desired
+    lat = dsg['lat_rho'][:,:]
     dsg.close()
 
     # make file list
     fn_list = []
-    if Ldir['lo_env'] == 'pm_mac': #indicates testing subset?
-        #frange = range(3000,3013+1)
-        frange = range(3000,3697+1)
-    elif Ldir['lo_env'] == 'pm_fjord': #indicates full dataset?
-        # we have 3000-3697, so use range(3000,3697+1)
-        frange = range(3000,3697+1)
-        #frange = range(1,20+1)
+    if testbatch:
+        frange = range(ni,ni+10)
+    else:
+        frange = range(ni,nf+1) # these values need to be determined from .nc fileset
     for ii in frange:  #building file names
         nn = ('0000' + str(ii))[-4:]
-        fn_list.append(in_dir + 'zts_Monterey_Exp41_' + nn + '.nc')
+        fn_list.append(in_dir + ncstr + nn + '.nc')
 
-    # make some things
+    # extract info about ROMS structure
     S_info_dict = {'VTRANSFORM':2, 'VSTRETCHING':4, 'THETA_S':7,
-        'THETA_B':4, 'TCLINE':50, 'N':40} #updated to reflect new files, but what is N?
+        'THETA_B':4, 'TCLINE':50, 'N':40} # these fields should be present in .nc files
     S = zrfun.get_S(S_info_dict)
-    G = zrfun.get_basic_info(fng, only_G=True) #zrfun had to be modified to reflect variables in .nc files. But what are 'pm' and 'pn'?
+    G = zrfun.get_basic_info(fng, only_G=True)
     fn = fn_list[0]
     ds = nc.Dataset(fn)
     h = ds['h'][:]
@@ -113,21 +77,21 @@ elif model_type == 'Kurapov':
     z0 = z[n_layer,:,:].squeeze()
     ds.close()
 
-if Ldir['lo_env'] == 'pm_mac':
-    etag = '_mac'
-elif Ldir['lo_env'] == 'pm_fjord':
+if testbatch:
+    etag = '_test'
+else:
     etag = ''
 
 NT = len(fn_list)
 
 # prepare a directory for results
-outdir0 = Ldir['parent'] + 'ptools_output/slow_slip/'
+outdir0 = outdir + model_type + '/'
 Lfun.make_dir(outdir0, clean=False)
-outdir = outdir0 + 'bottom_pressure_extractions/'
-Lfun.make_dir(outdir, clean=False)
+ncoutdir = outdir0 + 'bottom_pressure_extractions/'
+Lfun.make_dir(ncoutdir, clean=False)
 # output file
 out_name = 'pressure_' + tag + etag + '.nc'
-out_fn = outdir + out_name
+out_fn = ncoutdir + out_name
 # get rid of the old version, if it exists
 try:
     os.remove(out_fn)
@@ -135,64 +99,47 @@ except OSError:
     pass # assume error was because the file did not exist
 
 # make bottom pressure
-if do_press:
-    g = 9.81
-    for tt in range(NT): #for each .nc file
-        fn = fn_list[tt]
-        ds1 = nc.Dataset(fn)
-        if np.mod(tt,10)==0: #print to console every 10th file
-            print('tt = ' + str(tt) + '/' + str(NT) + ' ' + str(datetime.now()))
-            sys.stdout.flush()
-        if model_type == 'LiveOcean':
-            zeta = ds1['zeta'][0,:,:].squeeze()
-            if tt == 0:
-                bp_arr = (0*zeta) * np.ones((NT,1,1))
-                DA = G['DX'] * G['DY']
-                DAm = np.ma.masked_where(zeta.mask, DA)
-            rho = ds1['rho'][0,:,:,:].squeeze() + 1000.
-            # note that rho appears to be in situ density, not potential density
-            z_w = zrfun.get_z(G['h'], zeta, S, only_w=True)
-            DZ = np.diff(z_w, axis=0)
-            bp_arr[tt,:,:] = (g * rho * DZ).sum(axis=0)
-        elif model_type == 'Kurapov':
-            import seawater
-            zeta = ds1['zeta'][0,:,:].squeeze()
-            if tt == 0:
-                bp_arr = (0*zeta) * np.ones((NT,1,1))
-                DA = G['DX'] * G['DY'] #are these grid step size? used to calculate area?
-                DA = DA[:,:] #matches the (cutout?) range used earlier
-                DAm = np.ma.masked_where(zeta.mask, DA)
-            salt = ds1['salt'][0,:,:,:].squeeze()
-            ptemp = ds1['temp'][0,:,:,:].squeeze() # potential temperature
-            z_r = zrfun.get_z(G['h'][:,:], 0* zeta, S, only_rho=True)
-            z_w = zrfun.get_z(G['h'][:,:], zeta, S, only_w=True)
-            p = seawater.pres(-z_r, G['lat_rho'][0,0])
-            temp = seawater.temp(salt, ptemp, p) # in situ temperature
-            # for some reason seawater.dens throws errors if we don't do this
-            sd = salt.data
-            td = temp.data
-            prd = p.data
-            sd[salt.mask] = np.nan
-            td[salt.mask] = np.nan
-            prd[salt.mask] = np.nan
-            prho = seawater.pden(sd, td, prd) # potential density
-            prho = np.ma.masked_where(salt.mask, prho)
-            rho = seawater.dens(sd, td, prd) # in-situ density from salinity, temperature, and pressure
-            rho = np.ma.masked_where(salt.mask, rho)
-            DZ = np.diff(z_w, axis=0)
-            bp_arr[tt,:,:] = (g * rho * DZ).sum(axis=0) # sums vertically
-        ds1.close()
-    bp_mean = np.mean(bp_arr, axis=0)
-    bp_anom = bp_arr - bp_mean
+g = 9.81
+for tt in range(NT): #for each .nc file
+    fn = fn_list[tt]
+    ds1 = nc.Dataset(fn)
+    if np.mod(tt,10)==0: # print update to console every 10th file
+        print('tt = ' + str(tt) + '/' + str(NT) + ' ' + str(datetime.now()))
+        sys.stdout.flush()
+    if model_type == 'Kurapov':
+        # Kurapov variable structure: [time,layer,lon,lat]
+        import seawater
+        zeta = ds1['zeta'][0,:,:].squeeze()
+        if tt == 0:
+            bp_arr = (0*zeta) * np.ones((NT,1,1))
+        salt = ds1['salt'][0,:,:,:].squeeze()
+        ptemp = ds1['temp'][0,:,:,:].squeeze() # potential temperature
+        z_r = zrfun.get_z(G['h'][:,:], 0* zeta, S, only_rho=True)
+        z_w = zrfun.get_z(G['h'][:,:], zeta, S, only_w=True)
+        p = seawater.pres(-z_r, G['lat_rho'][0,0])
+        temp = seawater.temp(salt, ptemp, p) # in situ temperature
+        # for some reason seawater.dens throws errors if we don't do this
+        sd = salt.data
+        td = temp.data
+        prd = p.data
+        sd[salt.mask] = np.nan
+        td[salt.mask] = np.nan
+        prd[salt.mask] = np.nan
+        prho = seawater.pden(sd, td, prd) # potential density
+        prho = np.ma.masked_where(salt.mask, prho)
+        rho = seawater.dens(sd, td, prd) # in-situ density from salinity, temperature, and pressure
+        rho = np.ma.masked_where(salt.mask, rho)
+        DZ = np.diff(z_w, axis=0)
+        bp_arr[tt,:,:] = (g * rho * DZ).sum(axis=0) # sums vertically
+    ds1.close()
+bp_mean = np.mean(bp_arr, axis=0) # mean pressure of given location for entire time range
+bp_anom = bp_arr - bp_mean
 
 # initialize output Dataset
 ds2 = nc.Dataset(out_fn, 'w')
 
 # lists of variables to process
-if model_type == 'LiveOcean':
-    dlist = ['xi_rho', 'eta_rho', 'xi_psi', 'eta_psi', 'ocean_time']
-    vn_list2 = [ 'lon_rho', 'lat_rho', 'lon_psi', 'lat_psi', 'mask_rho', 'h']
-elif model_type == 'Kurapov':
+if model_type == 'Kurapov':
     dlist = ['xi_rho', 'eta_rho', 'ocean_time']
     vn_list2 = [ 'lon_rho', 'lat_rho', 'mask_rho', 'h']
 vn_list2t = ['zeta', 'ocean_time']
@@ -209,19 +156,15 @@ for dname, the_dim in ds1.dimensions.items():
 if model_type == 'Kurapov':
     dsg = nc.Dataset(fng)
 for vn in vn_list2:
-    if model_type == 'LiveOcean':
-        varin = ds1[vn]
-    elif model_type == 'Kurapov':
-        varin = dsg[vn] #copy in coordinates and mask
+    if model_type == 'Kurapov':
+        varin = dsg[vn] # copy in coordinates and mask
     vv = ds2.createVariable(vn, varin.dtype, varin.dimensions)
     vv.setncatts({k: varin.getncattr(k) for k in varin.ncattrs()})
-    if model_type == 'LiveOcean':
-        vv[:] = ds1[vn][:]
-    elif model_type == 'Kurapov':
-        vv[:] = dsg[vn][:,:] #cutout again?
+    if model_type == 'Kurapov':
+        vv[:] = dsg[vn][:,:]
 if model_type == 'Kurapov':
     dsg.close()
-#
+# Write metadata to new .nc file
 for vn in vn_list2t:
     varin = ds1[vn] #zeta and time
     vv = ds2.createVariable(vn, varin.dtype, varin.dimensions)
@@ -272,24 +215,24 @@ vv = ds2.createVariable('z', float, ('eta_rho', 'xi_rho'))
 vv.long_name = 'z position closest to free surface for 3D variables '
 vv.units = 'meter'
 vv[:] = z0
+
+#copy bottom pressure and anomaly
+vv = ds2.createVariable('bp', float, ('ocean_time', 'eta_rho', 'xi_rho'))
+vv.long_name = 'bottom pressure'
+vv.units = 'Pa'
+vv.time = 'ocean_time'
+vv[:] = bp_arr
 #
-if do_press: #copy bottom pressure and anomaly
-    vv = ds2.createVariable('bp', float, ('ocean_time', 'eta_rho', 'xi_rho'))
-    vv.long_name = 'bottom pressure'
-    vv.units = 'Pa'
-    vv.time = 'ocean_time'
-    vv[:] = bp_arr
-    #
-    vv = ds2.createVariable('bpa', float, ('ocean_time', 'eta_rho', 'xi_rho'))
-    vv.long_name = 'bottom pressure anomaly'
-    vv.units = 'Pa'
-    vv.time = 'ocean_time'
-    vv[:] = bp_anom
+vv = ds2.createVariable('bpa', float, ('ocean_time', 'eta_rho', 'xi_rho'))
+vv.long_name = 'bottom pressure anomaly'
+vv.units = 'Pa'
+vv.time = 'ocean_time'
+vv[:] = bp_anom
 
 ds1.close()
 ds2.close()
 
-#%% prepare for finale
+# prepare for finale
 import collections
 result_dict = collections.OrderedDict()
 time_format = '%Y.%m.%d %H:%M:%S'
@@ -303,11 +246,13 @@ if os.path.isfile(out_fn):
 else:
     result_dict['result'] = 'fail'
 
-if True:
+if False:
     zfun.ncd(out_fn)
 
-if Ldir['lo_env'] == 'pm_mac': #make plots if working on subset?
+if testbatch: #make plots if working on subset?
+    # plotting imports
     import matplotlib.pyplot as plt
+
     plt.close('all')
     fs = 12 # primary fontsize
     lw = 1 # primary linewidth
@@ -334,7 +279,7 @@ if Ldir['lo_env'] == 'pm_mac': #make plots if working on subset?
     ax2.legend(fontsize=fs, loc='upper right')
     ax2.set_xlabel('(psu)',fontsize=fs)
     ax2.set_title('Salinity',fontsize=fs+2)
-    fig0.savefig(outdir + 'profiles.png')
+    fig0.savefig(ncoutdir + 'profiles.png')
 
     fig = plt.figure(figsize=(8.5,11))
     ax = fig.add_subplot(111)
@@ -344,8 +289,11 @@ if Ldir['lo_env'] == 'pm_mac': #make plots if working on subset?
     ax.plot(ds['lon_rho'][15,5], ds['lat_rho'][15,5],'xk',markersize=10,markeredgewidth=2)
     fig.colorbar(pch)
     ax.set_title(ds[vn].long_name + ' (dbar)')
-    pfun.dar(ax)
-    fig.savefig(outdir + 'mapview.png')
+    # make axes locally Cartesian
+    yl = ax.get_ylim()
+    yav = (yl[0] + yl[1])/2
+    ax.set_aspect(1/np.sin(np.pi*yav/180))
+    fig.savefig(ncoutdir + 'mapview.png')
 
     # put data into a DataFrame
     import pandas as pd
@@ -362,7 +310,7 @@ if Ldir['lo_env'] == 'pm_mac': #make plots if working on subset?
     axa = fig1.add_subplot(111)
     df.plot(ax=axa)
     axa.set_ylabel('Bottom Pressure (cm)')
-    fig1.savefig(outdir + 'timeseries.png')
+    fig1.savefig(ncoutdir + 'timeseries.png')
 
     plt.show()
     ds.close()
