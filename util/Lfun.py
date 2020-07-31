@@ -106,7 +106,7 @@ def datetime_to_modtime(dt):
 def modtime_to_datetime(t):
     # INPUT: seconds since 1/1/1970 (single number)
     # OUTPUT: datetime version
-    dt = datetime(2008,10,1,0,0) + timedelta(seconds=t)
+    dt = datetime(2008,1,1,0,0) + timedelta(seconds=t)
     return dt
 
 def modtime_to_mdate_vec(mt_vec):
