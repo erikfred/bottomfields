@@ -87,7 +87,7 @@ NT = len(fn_list)
 # prepare a directory for results
 outdir0 = outdir + model_type + '/'
 Lfun.make_dir(outdir0, clean=False)
-ncoutdir = outdir0 + 'bottom_pressure_extractions/'
+ncoutdir = outdir0 + 'bottom_pressure_extractions2/'
 Lfun.make_dir(ncoutdir, clean=False)
 # output file
 out_name = 'pressure_' + tag + etag + '.nc'
@@ -295,6 +295,64 @@ if testbatch: #make plots if working on subset?
     ax.set_aspect(1/np.sin(np.pi*yav/180))
     fig.savefig(ncoutdir + 'mapview.png')
 
+    # put data into a DataFrame
+    import pandas as pd
+    bpam = ds['bpa'][:,15,5].squeeze()/100.65
+    tm = ds['ocean_time'][:]
+    dtm_list = []
+    for t in tm:
+        dtm_list.append(Lfun.modtime_to_datetime(t))
+    dti = pd.to_datetime(dtm_list)
+    dti = dti.tz_localize('UTC')
+    df = pd.DataFrame(data={'bpa':bpam}, index = dti)
+    df.index.name = 'Date'
+    fig1 = plt.figure(figsize=(11,8.5))
+    axa = fig1.add_subplot(111)
+    df.plot(ax=axa)
+    axa.set_ylabel('Bottom Pressure (cm)')
+    fig1.savefig(ncoutdir + 'timeseries.png')
+
+    plt.show()
+    ds.close()
+
+if True: # plots of full extraction
+    # plotting imports
+    import matplotlib.pyplot as plt
+
+    plt.close('all')
+    fs = 12 # primary fontsize
+    lw = 1 # primary linewidth
+    ds = nc.Dataset(out_fn)
+    vn = 'bpa'
+
+    NT = np.shape(ds[vn])
+    for tt in range(NT[0]):
+        fig = plt.figure(figsize=(8.5,11))
+        ax = fig.add_subplot(111)
+        pch = ax.pcolormesh(ds['lon_rho'][:], ds['lat_rho'][:], ds[vn][tt,:,:].squeeze()/100.65, vmin=-5, vmax=5)
+        fig.colorbar(pch)
+        ax.set_title(ds[vn].long_name + ' (cm)')
+        # make axes locally Cartesian
+        yl = ax.get_ylim()
+        yav = (yl[0] + yl[1])/2
+        ax.set_aspect(1/np.sin(np.pi*yav/180))
+        svstr = 'bpa/bpa_' + str(tt).zfill(3)
+        fig.savefig(ncoutdir + svstr + '.png')
+        plt.close()
+        """
+        fig = plt.figure(figsize=(8.5,11))
+        ax = fig.add_subplot(111)
+        pch = ax.pcolormesh(ds['lon_rho'][:], ds['lat_rho'][:], ds['zeta'][tt,:,:].squeeze())
+        fig.colorbar(pch)
+        ax.set_title(ds['zeta'].long_name + ' (m)')
+        # make axes locally Cartesian
+        yl = ax.get_ylim()
+        yav = (yl[0] + yl[1])/2
+        ax.set_aspect(1/np.sin(np.pi*yav/180))
+        svstr = 'ssh/ssh_' + str(tt).zfill(3)
+        fig.savefig(ncoutdir + svstr + '.png')
+        plt.close()
+        """
     # put data into a DataFrame
     import pandas as pd
     bpam = ds['bpa'][:,15,5].squeeze()/100.65
